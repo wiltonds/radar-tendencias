@@ -13,28 +13,54 @@ PERSPECTIVAS = [
 ]
 
 # ---------- 1. COLETA (Tavily) ----------
+# ---------- 0. PLANEJAR BUSCAS (LLM expande o tema) ----------
+def planejar_queries(tema):
+    r = requests.post("https://openrouter.ai/api/v1/chat/completions",
+        headers={"Authorization": f"Bearer {st.secrets['OPENROUTER_API_KEY']}"},
+        json={
+            "model": "deepseek/deepseek-chat",
+            "temperature": 0.3,
+            "messages": [{"role": "user", "content":
+                f'O tema é: "{tema}". Gere 3 consultas de busca curtas, em INGLÊS, '
+                f'específicas para esse tema no contexto tecnológico/industrial correto. '
+                f'Responda APENAS um array JSON de strings. Ex: ["query 1","query 2","query 3"]'}],
+        }, timeout=60)
+    txt = r.json()["choices"][0]["message"]["content"]
+    try:
+        return json.loads(txt[txt.index("["): txt.rindex("]") + 1])
+    except Exception:
+        return [tema]
+
+# ---------- 1. COLETA (Tavily, com queries planejadas) ----------
 def coletar(tema):
+    queries = planejar_queries(tema)
     evidencias = []
     for tipo, dominios in PERSPECTIVAS:
-        try:
-            r = requests.post("https://api.tavily.com/search", json={
-                "api_key": st.secrets["TAVILY_API_KEY"],
-                "query": tema,
-                "search_depth": "advanced",
-                "max_results": 3,
-                "include_domains": dominios,
-            }, timeout=30)
-            for res in r.json().get("results", []):
-                evidencias.append({
-                    "titulo": res.get("title", ""),
-                    "url": res.get("url", ""),
-                    "tipo": tipo,
-                    "data": res.get("published_date", ""),
-                    "trecho": (res.get("content", "") or "")[:400],
-                })
-        except Exception as e:
-            st.warning(f"Falha na coleta ({tipo}): {e}")
-    return evidencias
+        for q in queries:
+            try:
+                r = requests.post("https://api.tavily.com/search", json={
+                    "api_key": st.secrets["TAVILY_API_KEY"],
+                    "query": q,
+                    "search_depth": "advanced",
+                    "max_results": 2,
+                    "include_domains": dominios,
+                }, timeout=30)
+                for res in r.json().get("results", []):
+                    evidencias.append({
+                        "titulo": res.get("title", ""),
+                        "url": res.get("url", ""),
+                        "tipo": tipo,
+                        "data": res.get("published_date", ""),
+                        "trecho": (res.get("content", "") or "")[:400],
+                    })
+            except Exception as e:
+                st.warning(f"Falha na coleta ({tipo}): {e}")
+    # remove URLs repetidas
+    vistas, unicas = set(), []
+    for e in evidencias:
+        if e["url"] and e["url"] not in vistas:
+            vistas.add(e["url"]); unicas.append(e)
+    return unicas
 
 # ---------- 2. SÍNTESE (LLM via OpenRouter) ----------
 PROMPT = """Você é um analista de inteligência tecnológica. Recebe um TEMA e uma lista de EVIDÊNCIAS já coletadas (titulo, url, tipo, data, trecho). NÃO invente fatos nem fontes; use só as evidências fornecidas.
