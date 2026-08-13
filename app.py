@@ -96,9 +96,8 @@ def coletar(tema):
 PROMPT = """Você é um analista de inteligência tecnológica. Recebe um TEMA e uma lista de EVIDÊNCIAS (titulo, url, tipo, data, trecho). NÃO invente fatos nem fontes; use só as evidências fornecidas.
 Consolide, elimine redundâncias, identifique padrões e produza um painel executivo. Calibre a confiança pela QUANTIDADE, pela DIVERSIDADE de perspectivas (campo "tipo") e pela AUTORIDADE/RECÊNCIA. Poucas fontes ou de uma só perspectiva = confiança baixa; diga isso.
 Responda com APENAS um JSON válido (sem markdown), em PORTUGUÊS, neste schema:
-{"tema":str,"definicao":str,"maturidade":{"estagio":"Emergente|Em ascensão|Em consolidação|Madura","posicao":0-100,"justificativa":str},"aplicacoes":[str],"setores":[str],"players":[str],"investimentos":str,"sinais_adocao":str,"oportunidades":[str],"riscos":[str],"perspectivas":str,"confianca_global":{"score":0-100,"nivel":"Alta|Média|Baixa"},..."fontes":[{"titulo":str,"tipo":str,"url":str}]}
+{"tema":str,"definicao":str,"maturidade":{"estagio":"Emergente|Em ascensão|Em consolidação|Madura","posicao":0-100,"justificativa":str},"aplicacoes":[str],"setores":[str],"players":[str],"investimentos":str,"sinais_adocao":str,"oportunidades":[str],"riscos":[str],"perspectivas":str,"confianca_global":{"score":0-100,"nivel":"Alta|Média|Baixa"},"fontes":[{"titulo":str,"tipo":str,"url":str}]}
 Em "fontes", liste as 10 evidências mais relevantes (reuse as recebidas, mantendo o "tipo" original)."""
-def sintetizar(tema, ev)
 
 def sintetizar(tema, ev):
     r = requests.post("https://openrouter.ai/api/v1/chat/completions",
