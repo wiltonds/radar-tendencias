@@ -55,13 +55,15 @@ def cor(s):
     return "#34D399" if s >= 67 else "#F5A623" if s >= 34 else "#F87171"
 
 # ---------- 0. PLANEJAR BUSCAS ----------
+# ---------- 0. PLANEJAR BUSCAS (inglês + português) ----------
 def planejar_queries(tema):
     r = requests.post("https://openrouter.ai/api/v1/chat/completions",
         headers={"Authorization": f"Bearer {st.secrets['OPENROUTER_API_KEY']}"},
         json={"model": "deepseek/deepseek-chat", "temperature": 0.3,
               "messages": [{"role": "user", "content":
-                f'O tema é: "{tema}". Gere 3 consultas de busca curtas, em INGLÊS, específicas '
-                f'para esse tema no contexto tecnológico/industrial. Responda APENAS um array JSON de strings.'}]},
+                f'O tema é: "{tema}". Gere consultas de busca curtas e específicas para esse tema '
+                f'no contexto tecnológico/industrial: 3 em INGLÊS e 2 em PORTUGUÊS. '
+                f'Responda APENAS um array JSON de strings, sem rótulos de idioma.'}]},
         timeout=60)
     txt = r.json()["choices"][0]["message"]["content"]
     try:
