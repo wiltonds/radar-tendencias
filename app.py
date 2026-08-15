@@ -1,5 +1,6 @@
 import streamlit as st
 import requests, json
+from concurrent.futures import ThreadPoolExecutor
 
 st.set_page_config(page_title="Radar de Tendências", page_icon="📡", layout="wide")
 
@@ -56,6 +57,8 @@ def cor(s):
 
 # ---------- 0. PLANEJAR BUSCAS ----------
 # ---------- 0. PLANEJAR BUSCAS (inglês + português) ----------
+# ---------- 0. PLANEJAR BUSCAS (inglês + português) ----------
+@st.cache_data(show_spinner=False)
 def planejar_queries(tema):
     r = requests.post("https://openrouter.ai/api/v1/chat/completions",
         headers={"Authorization": f"Bearer {st.secrets['OPENROUTER_API_KEY']}"},
@@ -72,26 +75,29 @@ def planejar_queries(tema):
         return [tema]
 
 # ---------- 1. COLETA ----------
+def _uma_busca(tipo, dominios, q):
+    try:
+        r = requests.post("https://api.tavily.com/search", json={
+            "api_key": st.secrets["TAVILY_API_KEY"], "query": q,
+            "search_depth": "advanced", "max_results": 1, "include_domains": dominios}, timeout=30)
+        return [{"titulo": res.get("title", ""), "url": res.get("url", ""), "tipo": tipo,
+                 "data": res.get("published_date", ""), "trecho": (res.get("content", "") or "")[:400]}
+                for res in r.json().get("results", [])]
+    except Exception:
+        return []
+
 def coletar(tema):
     queries = planejar_queries(tema)
-    ev = []
-    for tipo, dominios in PERSPECTIVAS:
-        for q in queries:
-            try:
-                r = requests.post("https://api.tavily.com/search", json={
-                    "api_key": st.secrets["TAVILY_API_KEY"], "query": q,
-                    "search_depth": "advanced", "max_results": 1, "include_domains": dominios}, timeout=30)
-                for res in r.json().get("results", []):
-                    ev.append({"titulo": res.get("title", ""), "url": res.get("url", ""), "tipo": tipo,
-                               "data": res.get("published_date", ""), "trecho": (res.get("content", "") or "")[:400]})
-            except Exception as e:
-                st.warning(f"Falha na coleta ({tipo}): {e}")
+    tarefas = [(tipo, dominios, q) for tipo, dominios in PERSPECTIVAS for q in queries]
+    evidencias = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        for resultado in executor.map(lambda t: _uma_busca(*t), tarefas):
+            evidencias.extend(resultado)
     vistas, unicas = set(), []
-    for e in ev:
+    for e in evidencias:
         if e["url"] and e["url"] not in vistas:
             vistas.add(e["url"]); unicas.append(e)
     return unicas
-
 # ---------- 2. SÍNTESE ----------
 PROMPT = """Você é um analista de inteligência tecnológica. Recebe um TEMA e uma lista de EVIDÊNCIAS (titulo, url, tipo, data, trecho). NÃO invente fatos nem fontes; use só as evidências fornecidas.
 Consolide, elimine redundâncias, identifique padrões e produza um painel executivo. Calibre a confiança pela QUANTIDADE, pela DIVERSIDADE de perspectivas (campo "tipo") e pela AUTORIDADE/RECÊNCIA. Poucas fontes ou de uma só perspectiva = confiança baixa; diga isso.
@@ -177,7 +183,7 @@ def render(p):
 st.markdown(CSS, unsafe_allow_html=True)
 st.markdown('<div class="rtitle">📡 Radar de Tendências Tecnológicas</div>', unsafe_allow_html=True)
 st.caption("Painel executivo fundamentado em evidências")
-tema = st.text_input("Tema", placeholder="Ex.: Edge AI")
+tema = st.text_input("Tema", placeholder="Ex.: Eficiência Energética na Indústria 4.0")
 
 if st.button("Gerar painel", type="primary") and tema:
     with st.spinner("Planejando buscas e coletando evidências…"):
