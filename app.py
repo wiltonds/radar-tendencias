@@ -46,6 +46,7 @@ ul.rl li:before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px
 .src:first-child{border-top:none}
 .tag{font-size:10.5px;font-weight:700;border:1px solid #26324B;border-radius:6px;padding:2px 7px;white-space:nowrap}
 .sti{font-size:13px;color:#E7ECF6;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.synth{background:#121C2E;border:1px solid #26324B;border-radius:12px;padding:16px;margin-top:12px}
 .rec{background:#161D2E;border:1px solid #26324B;border-left:4px solid #F5A623;border-radius:12px;padding:16px;margin-top:12px}
 </style>
 """
@@ -101,11 +102,10 @@ def coletar(tema):
 
 # ---------- 2. SÍNTESE ----------
 PROMPT = """Você é um analista de inteligência tecnológica. Recebe um TEMA e uma lista de EVIDÊNCIAS (titulo, url, tipo, data, trecho). NÃO invente fatos nem fontes; use só as evidências fornecidas.
-Consolide, elimine redundâncias, identifique padrões e produza um painel executivo orientado à decisão. Calibre a confiança pela QUANTIDADE, pela DIVERSIDADE de perspectivas (campo "tipo") e pela AUTORIDADE/RECÊNCIA. Poucas fontes ou de uma só perspectiva = confiança baixa; diga isso.
-A recomendação DEVE ser coerente com a confiança: confiança alta pode sugerir ação (ex.: iniciar prova de conceito); confiança baixa deve sugerir cautela (ex.: monitorar, evidências ainda incipientes). A IA apoia a decisão; não a substitui.
+Consolide, elimine redundâncias, identifique padrões e produza um painel executivo orientado à decisão. Calibre a confiança pela QUANTIDADE, pela DIVERSIDADE de perspectivas (campo "tipo") e pela AUTORIDADE/RECÊNCIA. Poucas fontes ou de uma só perspectiva = confiança baixa; diga isso. A IA apoia a decisão; não a substitui.
 Responda com APENAS um JSON válido (sem markdown), em PORTUGUÊS, neste schema:
-{"tema":str,"definicao":str,"recomendacao":str,"proximos_passos":[str],"maturidade":{"estagio":"Emergente|Em ascensão|Em consolidação|Madura","posicao":0-100,"justificativa":str},"aplicacoes":[str],"setores":[str],"players":[str],"investimentos":str,"sinais_adocao":str,"oportunidades":[str],"riscos":[str],"perspectivas":str,"confianca_global":{"score":0-100,"nivel":"Alta|Média|Baixa"},"fontes":[{"titulo":str,"tipo":str,"url":str}]}
-Em "recomendacao", dê um veredito em uma frase. Em "proximos_passos", liste de 2 a 3 ações concretas. Em "players", liste empresas e instituições que DESENVOLVEM ou APLICAM a tecnologia (evite consultorias que apenas a analisam). Em "fontes", liste as 10 evidências mais relevantes (reuse as recebidas, mantendo o "tipo" original)."""
+{"tema":str,"sintese":str,"recomendacao":str,"proximos_passos":[str],"definicao":str,"maturidade":{"estagio":"Emergente|Em ascensão|Em consolidação|Madura","posicao":0-100,"justificativa":str},"aplicacoes":[str],"setores":[str],"players":[str],"investimentos":str,"sinais_adocao":str,"oportunidades":[str],"riscos":[str],"perspectivas":str,"confianca_global":{"score":0-100,"nivel":"Alta|Média|Baixa"},"fontes":[{"titulo":str,"tipo":str,"url":str}]}
+Em "sintese", dê o panorama em UMA frase (o quadro geral do tema). Em "recomendacao", NÃO resuma o tema: dê uma decisão acionável para a diretoria, começando com um verbo de ação (ex.: "Iniciar prova de conceito em uma linha piloto", "Monitorar — evidências ainda incipientes", "Priorizar investimento"), coerente com o nível de confiança. Em "proximos_passos", liste de 2 a 3 ações concretas. Em "players", liste empresas e instituições que DESENVOLVEM ou APLICAM a tecnologia (evite consultorias que apenas a analisam). Em "fontes", liste as 10 evidências mais relevantes (reuse as recebidas, mantendo o "tipo" original)."""
 
 @st.cache_data(show_spinner=False)
 def sintetizar(tema, ev):
@@ -157,6 +157,8 @@ def render(p):
     if "score" in g:
         h += f'<div class="conf"><div class="k">CONFIANÇA</div><div class="v" style="color:{cor(g["score"])}">{g["score"]}<span style="font-size:12px;color:#8A99B5">/100</span></div><div class="n">{esc(g.get("nivel",""))}</div></div>'
     h += '</div>'
+    if p.get("sintese"):
+        h += f'<div class="synth"><div class="eyebrow">SÍNTESE EXECUTIVA</div><p class="body">{esc(p["sintese"])}</p></div>'
     if p.get("recomendacao"):
         h += f'<div class="rec"><div class="eyebrow" style="color:#F5A623">RECOMENDAÇÃO</div><p class="body" style="font-weight:600">{esc(p["recomendacao"])}</p></div>'
     if fontes: h += cobertura(fontes)
