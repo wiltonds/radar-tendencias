@@ -46,6 +46,7 @@ ul.rl li:before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px
 .src:first-child{border-top:none}
 .tag{font-size:10.5px;font-weight:700;border:1px solid #26324B;border-radius:6px;padding:2px 7px;white-space:nowrap}
 .sti{font-size:13px;color:#E7ECF6;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rec{background:#161D2E;border:1px solid #26324B;border-left:4px solid #F5A623;border-radius:12px;padding:16px;margin-top:12px}
 </style>
 """
 
@@ -55,8 +56,6 @@ def esc(x):
 def cor(s):
     return "#34D399" if s >= 67 else "#F5A623" if s >= 34 else "#F87171"
 
-# ---------- 0. PLANEJAR BUSCAS ----------
-# ---------- 0. PLANEJAR BUSCAS (inglês + português) ----------
 # ---------- 0. PLANEJAR BUSCAS (inglês + português) ----------
 @st.cache_data(show_spinner=False)
 def planejar_queries(tema):
@@ -74,7 +73,7 @@ def planejar_queries(tema):
     except Exception:
         return [tema]
 
-# ---------- 1. COLETA ----------
+# ---------- 1. COLETA (paralela) ----------
 def _uma_busca(tipo, dominios, q):
     try:
         r = requests.post("https://api.tavily.com/search", json={
@@ -86,6 +85,7 @@ def _uma_busca(tipo, dominios, q):
     except Exception:
         return []
 
+@st.cache_data(show_spinner=False)
 def coletar(tema):
     queries = planejar_queries(tema)
     tarefas = [(tipo, dominios, q) for tipo, dominios in PERSPECTIVAS for q in queries]
@@ -98,13 +98,16 @@ def coletar(tema):
         if e["url"] and e["url"] not in vistas:
             vistas.add(e["url"]); unicas.append(e)
     return unicas
+
 # ---------- 2. SÍNTESE ----------
 PROMPT = """Você é um analista de inteligência tecnológica. Recebe um TEMA e uma lista de EVIDÊNCIAS (titulo, url, tipo, data, trecho). NÃO invente fatos nem fontes; use só as evidências fornecidas.
-Consolide, elimine redundâncias, identifique padrões e produza um painel executivo. Calibre a confiança pela QUANTIDADE, pela DIVERSIDADE de perspectivas (campo "tipo") e pela AUTORIDADE/RECÊNCIA. Poucas fontes ou de uma só perspectiva = confiança baixa; diga isso.
+Consolide, elimine redundâncias, identifique padrões e produza um painel executivo orientado à decisão. Calibre a confiança pela QUANTIDADE, pela DIVERSIDADE de perspectivas (campo "tipo") e pela AUTORIDADE/RECÊNCIA. Poucas fontes ou de uma só perspectiva = confiança baixa; diga isso.
+A recomendação DEVE ser coerente com a confiança: confiança alta pode sugerir ação (ex.: iniciar prova de conceito); confiança baixa deve sugerir cautela (ex.: monitorar, evidências ainda incipientes). A IA apoia a decisão; não a substitui.
 Responda com APENAS um JSON válido (sem markdown), em PORTUGUÊS, neste schema:
-{"tema":str,"definicao":str,"maturidade":{"estagio":"Emergente|Em ascensão|Em consolidação|Madura","posicao":0-100,"justificativa":str},"aplicacoes":[str],"setores":[str],"players":[str],"investimentos":str,"sinais_adocao":str,"oportunidades":[str],"riscos":[str],"perspectivas":str,"confianca_global":{"score":0-100,"nivel":"Alta|Média|Baixa"},"fontes":[{"titulo":str,"tipo":str,"url":str}]}
-Em "fontes", liste as 10 evidências mais relevantes (reuse as recebidas, mantendo o "tipo" original)."""
+{"tema":str,"definicao":str,"recomendacao":str,"proximos_passos":[str],"maturidade":{"estagio":"Emergente|Em ascensão|Em consolidação|Madura","posicao":0-100,"justificativa":str},"aplicacoes":[str],"setores":[str],"players":[str],"investimentos":str,"sinais_adocao":str,"oportunidades":[str],"riscos":[str],"perspectivas":str,"confianca_global":{"score":0-100,"nivel":"Alta|Média|Baixa"},"fontes":[{"titulo":str,"tipo":str,"url":str}]}
+Em "recomendacao", dê um veredito em uma frase. Em "proximos_passos", liste de 2 a 3 ações concretas. Em "players", liste empresas e instituições que DESENVOLVEM ou APLICAM a tecnologia (evite consultorias que apenas a analisam). Em "fontes", liste as 10 evidências mais relevantes (reuse as recebidas, mantendo o "tipo" original)."""
 
+@st.cache_data(show_spinner=False)
 def sintetizar(tema, ev):
     r = requests.post("https://openrouter.ai/api/v1/chat/completions",
         headers={"Authorization": f"Bearer {st.secrets['OPENROUTER_API_KEY']}"},
@@ -154,6 +157,8 @@ def render(p):
     if "score" in g:
         h += f'<div class="conf"><div class="k">CONFIANÇA</div><div class="v" style="color:{cor(g["score"])}">{g["score"]}<span style="font-size:12px;color:#8A99B5">/100</span></div><div class="n">{esc(g.get("nivel",""))}</div></div>'
     h += '</div>'
+    if p.get("recomendacao"):
+        h += f'<div class="rec"><div class="eyebrow" style="color:#F5A623">RECOMENDAÇÃO</div><p class="body" style="font-weight:600">{esc(p["recomendacao"])}</p></div>'
     if fontes: h += cobertura(fontes)
     if p.get("definicao"): h += f'<div class="rcard"><div class="eyebrow">DEFINIÇÃO</div><p class="body">{esc(p["definicao"])}</p></div>'
     m = p.get("maturidade")
@@ -171,6 +176,8 @@ def render(p):
     h += f'<div class="row2">{bloco_texto("INVESTIMENTOS E MERCADO", p.get("investimentos"))}{bloco_texto("SINAIS DE ADOÇÃO", p.get("sinais_adocao"))}</div>'
     h += f'<div class="row2">{bloco_lista("OPORTUNIDADES", p.get("oportunidades"), "#34D399")}{bloco_lista("DESAFIOS E RISCOS", p.get("riscos"), "#F87171")}</div>'
     if p.get("perspectivas"): h += f'<div class="rcard"><div class="eyebrow">PERSPECTIVAS FUTURAS</div><p class="body">{esc(p["perspectivas"])}</p></div>'
+    if p.get("proximos_passos"):
+        h += bloco_lista("PRÓXIMOS PASSOS", p.get("proximos_passos"), "#F5A623")
     if fontes:
         rows = ""
         for f in fontes:
